@@ -1,0 +1,9 @@
+workflow_files:
+  - workflows/ansible-lint.yml
+  - workflows/ansible-managed-var-comment.yml
+  - workflows/ansible-plugin-scan.yml
+  - workflows/ansible-test.yml
+  - workflows/changelog_to_tag.yml
+  - workflows/markdownlint.yml
+  - workflows/shellcheck.yml
+  - workflows/weekly_ci.yml

@@ -1,0 +1,103 @@
+# inputs:
+# __create_pr_files - dict - key is src file, value is dest relative to repo
+# __branch_name - string - name of branch to use for update
+# __pr_title - string - used for title of PR and commit
+# __pr_body - string - used for body of PR and commit
+- name: Create PR for given files
+  block:
+    - name: Create temp working dir
+      tempfile:
+        state: directory
+        prefix: lsr_
+        suffix: _pr
+      register: __working_dir
+
+    - name: Set some vars
+      set_fact:
+        git_dir: "{{ __working_dir.path ~ '/' ~ inventory_hostname }}"
+        input_files_file: "{{ __working_dir.path ~ '/input' }}"
+
+    - name: Clone repo
+      git:
+        repo: "{{ github_url_prefix ~ github_org ~ '/' ~ inventory_hostname }}"
+        dest: "{{ git_dir }}"
+
+    - name: Write inputs
+      copy:
+        dest: "{{ input_files_file }}"
+        content: |
+          {% for kk, vv in __create_pr_files.items() %}
+          {{ kk }} {{ vv }}
+          {% endfor %}
+
+    - name: Process files for git
+      shell:
+        chdir: "{{ git_dir }}"
+        cmd: |
+          set -euo pipefail
+          set -x
+          main_br=$(git branch --list main)
+          if [ -n "$main_br" ]; then
+            main_br=main
+          else
+            main_br=$(git branch --list master)
+            if [ -n "$main_br" ]; then
+              main_br=master
+            else
+              echo UNKNOWN
+              exit 1
+            fi
+          fi
+          if git checkout {{ __branch_name | quote }}; then
+            git rebase "$main_br"
+            force_flag="-f"
+            branch_exists=true
+          else
+            git checkout -b {{ __branch_name | quote }}
+            force_flag=""
+            branch_exists=false
+          fi
+          while read -r dest src; do
+            if [ "$src" = DELETE ]; then
+              if [ -e "$dest" ]; then
+                rm -rf "$dest"
+                git rm "$dest"
+              fi
+            else
+              dest_dir="$(dirname "$dest")"
+              if [ ! -d "$dest_dir" ]; then mkdir -p "$dest_dir"; fi
+              cp -p "$src" "$dest"
+              git add "$dest"
+            fi
+          done < "{{ input_files_file }}"
+          if git diff --cached --quiet; then
+            echo No updates for role {{ inventory_hostname }}
+          else
+            git_commit_msg_file="{{ __working_dir.path ~ '/git-commit-msg' }}"
+            cat > "$git_commit_msg_file" <<EOF
+          {{ __pr_title }}
+          
+          {{ __pr_body }}
+          EOF
+            git commit -s -F "$git_commit_msg_file"
+            if [ {{ lsr_dry_run | d('true') }} = false ]; then
+              git push $force_flag -u origin {{ __branch_name | quote }}
+            echo
+              echo git push $force_flag -u origin {{ __branch_name | quote }}
+            fi
+          fi
+          prnum="$(gh pr list -H {{ __branch_name | quote }} --json number --jq '.[].number')"
+          if [ -z "$prnum" ]; then
+            if [ {{ lsr_dry_run | d('true') }} = false ]; then
+              gh pr create --fill --base "$main_br"
+            else
+              echo gh pr create --fill --base "$main_br"
+            fi
+          else
+            echo Existing PR "$prnum"
+          fi
+  always:
+    - name: Clean up temp working dir
+      file:
+        path: "{{ __working_dir.path }}"
+        state: absent

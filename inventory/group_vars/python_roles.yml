@@ -1,0 +1,4 @@
+python_workflow_files:
+  - workflows/python-unit-test.yml
+
+enable_codeql: true

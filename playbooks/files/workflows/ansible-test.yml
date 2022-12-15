@@ -1,8 +1,11 @@
 name: Ansible Test
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 env:
   TOX_LSR: "git+https://github.com/linux-system-roles/tox-lsr@2.13.1"
   LSR_ROLE2COLL_NAMESPACE: fedora

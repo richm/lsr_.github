@@ -1,8 +1,11 @@
 name: ShellCheck
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 env:
   # some scripts source tox-lsr scripts - suppress that check
   SHELLCHECK_OPTS: -e SC1091
